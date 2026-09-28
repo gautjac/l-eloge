@@ -83,7 +83,10 @@ export async function readDraft(
   const res = await client().messages.create({
     model: MODEL,
     max_tokens: 1200,
-    system: `${VOICE}\n\n${HONESTY}`,
+    // The tool + system prompt are the same on every read, so the breakpoint
+    // after them lets each read → revise → read pass pull that prefix from the
+    // cache; only the draft (in the user turn, after it) changes.
+    system: [{ type: "text", text: `${VOICE}\n\n${HONESTY}`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",
@@ -103,6 +106,10 @@ export async function readDraft(
     tools: [READING_TOOL],
     tool_choice: { type: "tool", name: "deliver_reading" },
   });
+  const u = res.usage;
+  console.log(
+    `[l-eloge] read: input=${u.input_tokens} cache_read=${u.cache_read_input_tokens ?? 0} cache_write=${u.cache_creation_input_tokens ?? 0} output=${u.output_tokens}`,
+  );
 
   const tool = res.content.find((b) => b.type === "tool_use");
   if (!tool || tool.type !== "tool_use") throw new Error("No reading returned");
